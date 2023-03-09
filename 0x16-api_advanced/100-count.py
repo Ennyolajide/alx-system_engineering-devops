@@ -5,32 +5,49 @@
 import requests
 
 
-def count_words(subreddit, word_list, after=None, counts={}):
-    # Base case: no more articles to fetch
-    if after == "":
-        # Sort the counts by count (descending) and then by word (ascending)
-        sorted_counts = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
-        for word, count in sorted_counts:
-            print(f"{word}: {count}")
+def count_words(subreddit, word_list, after=None, count={}):
+    """
+    a recursive function that queries the Reddit API,
+    parses the title of all hot articles, and prints a
+    sorted count of given keywords (case-insensitive,
+    delimited by spaces. Javascript should count as javascript,
+    but java should not).
+    Parameters:
+        subreddit - the subreddit to search
+        word_list - contains the same word (case-insensitive),
+            the final count should be the sum of each duplicate
+    """
+    if word_list == []:
+        return None
+    else:
+        lower_list = (map(lambda word: word.lower(), word_list))
+        word_list = list(lower_list)
+    if after is None:
+        hot = 'https://www.reddit.com/r/{}/hot.json'.format(subreddit)
+    else:
+        hot = 'https://www.reddit.com/r/{}/hot.json?after={}'.format(
+            subreddit, after)
+    hot_request = requests.get(hot,
+                               headers={"user-agent": "user"},
+                               allow_redirects=False)
+    try:
+        data = hot_request.json().get("data")
+    except:
         return
-    
-    # Query the Reddit API for hot articles in the subreddit
-    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    params = {"after": after}
-    response = requests.get(url, headers=headers, params=params, allow_redirects=False)
-    
-    # Base case: invalid subreddit or no more articles to fetch
-    if response.status_code != 200:
-        return
-    
-    # Recursively call count_words with the next "after" parameter
-    data = response.json()
-    children = data["data"]["children"]
+    for word in word_list:
+        if word not in count.keys():
+            count[word] = 0
+    children = data.get("children")
     for child in children:
-        title = child["data"]["title"].lower()
+        title = (child.get("data").get("title").lower())
+        title = title.split(' ')
         for word in word_list:
-            # Ignore words with special characters (e.g. java. or java!)
-            if f"{word.lower()} " in title:
-                counts[word.lower()] = counts.get(word.lower(), 0) + title.count(f"{word.lower()} ")
-    count_words(subreddit, word_list, data["data"]["after"], counts)
+            count[word] += title.count(word)
+    after = data.get("after")
+    if after is not None:
+        return count_words(subreddit, word_list, after, count)
+    else:
+        sorted_subs = sorted(count.items(), key=lambda x: (-x[1], x[0]))
+        for i in sorted_subs:
+            if i[1] != 0:
+                print(i[0] + ": " + str(i[1]))
