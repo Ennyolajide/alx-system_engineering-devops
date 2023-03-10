@@ -5,7 +5,7 @@
 import requests
 
 
-def count_words(subreddit, word_list, after=None, count={}):
+def count_words(subreddit, word_list, counts=None):
     """
     a recursive function that queries the Reddit API,
     parses the title of all hot articles, and prints a
@@ -17,37 +17,24 @@ def count_words(subreddit, word_list, after=None, count={}):
         word_list - contains the same word (case-insensitive),
             the final count should be the sum of each duplicate
     """
-    if word_list == []:
-        return None
-    else:
-        lower_list = (map(lambda word: word.lower(), word_list))
-        word_list = list(lower_list)
-    if after is None:
-        hot = 'https://www.reddit.com/r/{}/hot.json'.format(subreddit)
-    else:
-        hot = 'https://www.reddit.com/r/{}/hot.json?after={}'.format(
-            subreddit, after)
-    hot_request = requests.get(hot,
-                               headers={"user-agent": "user"},
-                               allow_redirects=False)
-    try:
-        data = hot_request.json().get("data")
-    except:
+    if counts is None:
+        counts = {}
+    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
+    headers = {'User-agent': 'Mozilla/5.0'}
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
         return
-    for word in word_list:
-        if word not in count.keys():
-            count[word] = 0
-    children = data.get("children")
-    for child in children:
-        title = (child.get("data").get("title").lower())
-        title = title.split(' ')
+    data = response.json()
+    for post in data['data']['children']:
+        title = post['data']['title']
         for word in word_list:
-            count[word] += title.count(word)
-    after = data.get("after")
-    if after is not None:
-        return count_words(subreddit, word_list, after, count)
+            if word.lower() in title.lower() and not any(c.isalpha() for c in title.lower().split(word.lower())[0][-1:]):
+                if word.lower() not in counts:
+                    counts[word.lower()] = 1
+                else:
+                    counts[word.lower()] += 1
+    if data['data']['after'] is not None:
+        count_words(subreddit, word_list, counts=counts)
     else:
-        sorted_subs = sorted(count.items(), key=lambda x: (-x[1], x[0]))
-        for i in sorted_subs:
-            if i[1] != 0:
-                print(i[0] + ": " + str(i[1]))
+        for word, count in sorted(counts.items(), key=lambda x: (-x[1], x[0])):
+            print(f"{word}: {count}")
